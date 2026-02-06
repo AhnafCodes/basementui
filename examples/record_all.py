@@ -13,7 +13,8 @@ GO_DIR = os.path.join(PROJ_DIR, "go")
 EXAMPLES_DIR = os.path.join(PROJ_DIR, "examples")
 BIN_DIR = os.path.join(EXAMPLES_DIR, "bin")
 COLS = 80
-ROWS = 24
+DEFAULT_ROWS = 15
+LARGE_ROWS = 40
 
 # ANSI escape sequences for arrow keys
 UP = "\x1b[A"
@@ -47,7 +48,7 @@ def build_example(name, command):
     return bin_path
 
 
-def record_cast(name, bin_path, actions, cols=COLS, rows=ROWS):
+def record_cast(name, bin_path, actions, cols=COLS, rows=DEFAULT_ROWS):
     """
     Record an asciicast v2 file by running the pre-built binary.
 
@@ -77,13 +78,13 @@ def record_cast(name, bin_path, actions, cols=COLS, rows=ROWS):
                 if data:
                     t = time.time() - start_time
                     events.append((t, "o", data.decode("utf-8", errors="replace")))
-                    wait = 0.02  # Quick subsequent reads
+                    wait = 0.005  # Capture more frames (was 0.01)
         except (pexpect.TIMEOUT, pexpect.EOF):
             pass
 
     # Wait for initial render
-    time.sleep(0.3)
-    capture_output(wait=0.2)
+    time.sleep(0.1)
+    capture_output(wait=0.1)
 
     # Execute the scripted actions
     for action in actions:
@@ -161,21 +162,21 @@ EXAMPLES = {
     "example2": {
         "command": "go run cmd/example2_counter/main.go",
         "actions": [
-            (5.0, None),    # Watch counter for 5s
+            (4.0, None),    # Watch counter for 5s
             (0, "q"),       # Quit
         ],
     },
     "example3": {
         "command": "go run cmd/example3_computed/main.go",
         "actions": [
-            (5.0, None),    # Watch for 5s
+            (4.0, None),    # Watch for 5s
             (0, "q"),       # Quit
         ],
     },
     "example4": {
         "command": "go run cmd/example4_clock/main.go",
         "actions": [
-            (5.0, None),    # Watch clock for 5s
+            (4.0, None),    # Watch clock for 5s
             (0, "q"),       # Quit
         ],
     },
@@ -189,7 +190,7 @@ EXAMPLES = {
     "example6": {
         "command": "go run cmd/example6_conditional/main.go",
         "actions": [
-            (7.0, None),    # Watch conditional for 7s
+            (6.0, None),    # Watch conditional for 7s
             (0, "q"),       # Quit
         ],
     },
@@ -230,6 +231,7 @@ EXAMPLES = {
     },
     "example10": {
         "command": "go run cmd/example10_layout/main.go",
+        "rows": LARGE_ROWS,
         "actions": [
             (2.0, None),
             (0.4, DOWN), (0.4, DOWN), (0.4, DOWN),
@@ -239,6 +241,7 @@ EXAMPLES = {
     },
     "example11": {
         "command": "go run cmd/example11_markdown/main.go",
+        "rows": LARGE_ROWS,
         "actions": [
             (2.0, None),
         ] + [(0.15, DOWN)] * 10 + [
@@ -249,6 +252,7 @@ EXAMPLES = {
     },
     "example12": {
         "command": "go run -tags chroma cmd/example12_chroma/main.go",
+        "rows": LARGE_ROWS,
         "actions": [
             (3.0, None),
         ] + [(0.2, DOWN)] * 5 + [
@@ -285,12 +289,14 @@ def main():
             continue
 
         ex = EXAMPLES[name]
+        rows = ex.get("rows", DEFAULT_ROWS)
+        
         print(f"\n{'='*50}")
-        print(f"Recording {name}")
+        print(f"Recording {name} (rows={rows})")
         print(f"{'='*50}")
 
         try:
-            record_cast(name, bin_paths[name], ex["actions"])
+            record_cast(name, bin_paths[name], ex["actions"], rows=rows)
             cast_to_gif(name)
         except Exception as e:
             print(f"  ERROR recording {name}: {e}")

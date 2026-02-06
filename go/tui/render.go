@@ -40,24 +40,19 @@ func assignHoles(n *basement.Node, count *int) {
 
 // Render mounts the renderable to the screen
 func Render(screen *Screen, fn func() Renderable) {
-	// Parse the template ONCE.
-	// This assumes the structure of the view doesn't change, only the data in the holes.
-	// This is consistent with the uhtml/BasementUI design.
-	r := fn()
-
 	// Create an effect for the rendering
 	signals.CreateEffect(func() {
-		// Clear the screen buffer before redrawing
-		screen.Clear()
+		// Execute the view function inside the effect.
+		r := fn()
 
-		// Render the tree to the Back buffer
-		// Note: renderNode will access signal values via GetValue(),
-		// which registers this effect as a subscriber.
-		// Pass ScrollY as negative offset to y
-		renderNode(screen, r.Root, r.Args, 0, -screen.ScrollY)
-
-		// Flush to terminal
-		screen.Render()
+		// Use Frame to lock once for the entire render cycle
+		screen.Frame(func() {
+			// Render the tree to the Back buffer
+			// Note: renderNode will access signal values via GetValue(),
+			// which registers this effect as a subscriber.
+			// Pass ScrollY as negative offset to y
+			renderNode(screen, r.Root, r.Args, 0, -screen.ScrollY)
+		})
 	})
 }
 
@@ -147,7 +142,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 				if part == "" { continue }
 
 				if curY >= 0 && curY < s.Back.Height {
-					s.DrawText(curX, curY, part, span.Style)
+					// Use unlocked version since we are inside Frame()
+					s.drawTextUnlocked(curX, curY, part, span.Style)
 				}
 				curX += utf8.RuneCountInString(part)
 			}
@@ -161,7 +157,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 			return x, y + 1 // Treat as newline
 		}
 		if y >= 0 && y < s.Back.Height {
-			s.DrawText(x, y, n.Content, n.Style)
+			// Use unlocked version since we are inside Frame()
+			s.drawTextUnlocked(x, y, n.Content, n.Style)
 		}
 		return x + utf8.RuneCountInString(n.Content), y
 
@@ -215,7 +212,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 				return curX, y
 			} else {
 				if y >= 0 && y < s.Back.Height {
-					s.DrawText(x, y, str, n.Style)
+					// Use unlocked version since we are inside Frame()
+					s.drawTextUnlocked(x, y, str, n.Style)
 				}
 				return x + utf8.RuneCountInString(str), y
 			}
@@ -247,7 +245,9 @@ func mergeStyles(parent, child basement.Style) basement.Style {
 	return basement.Style{
 		Bold:      parent.Bold || child.Bold,
 		Dim:       parent.Dim || child.Dim,
+		Italic:    parent.Italic || child.Italic,
 		Underline: parent.Underline || child.Underline,
+		Strike:    parent.Strike || child.Strike,
 		Reverse:   parent.Reverse || child.Reverse,
 		Blink:     parent.Blink || child.Blink,
 		Color:     color,

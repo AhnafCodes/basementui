@@ -61,11 +61,11 @@ test.. test... test..... test?..... test!....
 
 __This is bold text__ (Rendered as Underline in BasementUI)
 
-*This is italic text* (Not supported yet)
+*This is italic text*
 
 _This is italic text_ (Not supported yet)
 
-~~Strikethrough~~ (Not supported yet)
+~~Strikethrough~~
 
 
 ## Blockquotes
@@ -259,44 +259,37 @@ It converts "HTML", but keep intact partial entries like "xxxHTMLyyy" and so on.
 *here be dragons*
 :::
 
-(Press 'q' or Ctrl+C to exit. Use Up/Down to scroll.)
+(Press 'q' or Ctrl+C to exit. Use Up/Down/PgUp/PgDown to scroll.)
 `
 
 	// Reactive scroll state
 	scrollY := signals.New(0)
 
-	app := func() tui.Renderable {
-		// We can't easily pass scrollY to Template directly as a prop for the whole view
-		// because Template parses the string.
-		// But Render() now uses screen.ScrollY.
-		// So we just need to update screen.ScrollY when the signal changes.
-		// Wait, Render() reads screen.ScrollY directly.
-		// But screen.ScrollY is not a signal.
-		// We need to bind the signal to the screen property or update it manually.
+	// Optimization: Parse once
+	// We use a computed signal for the title to show scroll position,
+	// but the main content is static.
+	// Actually, Template() parses the whole string.
+	// To optimize, we should separate the dynamic header from the static body.
+	// But for simplicity, let's just parse once and assume the title is static for now
+	// to demonstrate performance.
+	// Or we can use a Hole for the title?
+	// Let's use a Hole for the scroll position in the title!
 
-		return tui.Template(markdown)
-	}
+	header := "# BasementUI Markdown Demo (ScrollY: %v)\n"
+	fullDoc := header + markdown
+
+	// Parse ONCE
+	// We pass scrollY as an argument.
+	// Note: Template parses the string.
+	cachedRenderable := tui.Template(fullDoc, scrollY)
 
 	screen := tui.NewScreen()
 	defer screen.Close()
 
-	// Create an effect to sync signal to screen
-	signals.CreateEffect(func() {
-		screen.ScrollY = scrollY.Get()
-		// Note: This effect is necessary to update the screen state reactively.
-		// The render effect (created by tui.Render) depends on signals accessed within it.
-		// Since wrappedApp accesses scrollY.Get(), the render effect will re-run when scrollY changes.
-		// However, we also need to ensure screen.ScrollY is updated *before* the render logic runs.
-		// Because effects run in creation order, and this effect is created before tui.Render,
-		// this runs first, updates the screen state, and then the render effect runs with the new state.
-	})
-
-	// To make it reactive, we need to access scrollY inside the Render loop.
-	// We can wrap the app function.
-
+	// Wrapped app just returns the cached renderable
 	wrappedApp := func() tui.Renderable {
-		scrollY.Get() // Register dependency so render effect re-runs on scroll
-		return app()
+		screen.ScrollY = scrollY.Get() // Side effect: update screen scroll
+		return cachedRenderable
 	}
 
 	tui.Render(screen, wrappedApp)
@@ -308,13 +301,22 @@ It converts "HTML", but keep intact partial entries like "xxxHTMLyyy" and so on.
 			quit <- true
 		}
 
+		current := scrollY.Get()
+		step := 1
+		page := 20 // Approximate page size
+
 		if ev.Key == tui.KeyArrowDown {
-			scrollY.Set(scrollY.Get() + 1)
+			scrollY.Set(current + step)
 		} else if ev.Key == tui.KeyArrowUp {
-			val := scrollY.Get()
-			if val > 0 {
-				scrollY.Set(val - 1)
+			if current > 0 {
+				scrollY.Set(current - step)
 			}
+		} else if ev.Key == tui.KeyPgDown {
+			scrollY.Set(current + page)
+		} else if ev.Key == tui.KeyPgUp {
+			newVal := current - page
+			if newVal < 0 { newVal = 0 }
+			scrollY.Set(newVal)
 		}
 	})
 	<-quit
