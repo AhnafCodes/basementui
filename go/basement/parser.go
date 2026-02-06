@@ -14,7 +14,8 @@ var (
 	codeFenceRe   = regexp.MustCompile(`^` + "```" + `(.*)`) // Capture language
 
 	// Inline Regexes
-	inlineTokenRe = regexp.MustCompile(`(%v)|(\*\*.+?\*\*)|(__.+?__)|(!?#[a-zA-Z0-9]{3,8}\(.+?\))`)
+	// Added (~~.+?~~) for Strikethrough
+	inlineTokenRe = regexp.MustCompile(`(%v)|(\*\*.+?\*\*)|(\*.+?\*)|(__.+?__)|(~~.+?~~)|(!?#[a-zA-Z0-9]{3,8}\(.+?\))`)
 )
 
 // ParseAST parses the input string into an AST
@@ -56,22 +57,15 @@ func ParseAST(input string) *Node {
 
 		// 2. Handle Lists (Stateful grouping)
 		if matches := listBlockRe.FindStringSubmatch(line); matches != nil {
-			// content := matches[3]
-			// For simplicity, we treat every list item as part of a new list if not already in one.
-			// A robust parser would handle indentation levels.
-
 			if currentList == nil {
 				currentList = NewNode(NodeList)
 				root.AddChild(currentList)
 			}
-
 			item := NewNode(NodeListItem)
-			// Parse inline content of the list item
 			item.Children = parseInline(matches[3])
 			currentList.AddChild(item)
 			continue
 		} else {
-			// Break list context if line is not empty and not a list item
 			if trimmed != "" {
 				currentList = nil
 			}
@@ -89,7 +83,7 @@ func ParseAST(input string) *Node {
 				style.Underline = true
 			}
 
-			node := NewNode(NodeHeader) // Use specific type
+			node := NewNode(NodeHeader)
 			node.Style = style
 			node.Children = parseInline(content)
 			root.AddChild(node)
@@ -111,12 +105,8 @@ func ParseAST(input string) *Node {
 		}
 
 		// 6. Default: Paragraph / Text Block
-		// Skip empty lines unless inside a block that needs them (handled above)
 		if trimmed == "" {
-			// Add a spacer? Or just ignore.
-			// Markdown usually treats empty lines as block separators.
-			// We can add an empty text block to force spacing.
-			root.AddChild(NewNode(NodeText)) // Empty text node acts as newline
+			root.AddChild(NewNode(NodeText))
 			continue
 		}
 
@@ -160,6 +150,13 @@ func parseInline(text string) []*Node {
 			styleNode.Style = Style{Bold: true}
 			styleNode.Children = parseInline(content)
 			nodes = append(nodes, styleNode)
+		} else if strings.HasPrefix(token, "*") {
+			// Italic
+			content := token[1 : len(token)-1]
+			styleNode := NewNode(NodeStyle)
+			styleNode.Style = Style{Italic: true}
+			styleNode.Children = parseInline(content)
+			nodes = append(nodes, styleNode)
 		} else if strings.HasPrefix(token, "__") {
 			// Underline
 			content := token[2 : len(token)-2]
@@ -167,20 +164,24 @@ func parseInline(text string) []*Node {
 			styleNode.Style = Style{Underline: true}
 			styleNode.Children = parseInline(content)
 			nodes = append(nodes, styleNode)
+		} else if strings.HasPrefix(token, "~~") {
+			// Strikethrough
+			content := token[2 : len(token)-2]
+			styleNode := NewNode(NodeStyle)
+			styleNode.Style = Style{Strike: true}
+			styleNode.Children = parseInline(content)
+			nodes = append(nodes, styleNode)
 		} else if strings.Contains(token, "#") {
-			// Color: #red(text) or !#red(text)
+			// Color
 			isBg := strings.HasPrefix(token, "!")
-
-			// Extract name and content
 			startParen := strings.Index(token, "(")
 			endParen := strings.LastIndex(token, ")")
 
 			if startParen > -1 && endParen > startParen {
-				colorName := token[1:startParen] // skip #
+				colorName := token[1:startParen]
 				if isBg {
-					colorName = token[2:startParen] // skip !#
+					colorName = token[2:startParen]
 				}
-
 				content := token[startParen+1 : endParen]
 
 				styleNode := NewNode(NodeStyle)
@@ -195,7 +196,6 @@ func parseInline(text string) []*Node {
 				styleNode.Children = parseInline(content)
 				nodes = append(nodes, styleNode)
 			} else {
-				// Fallback if parsing fails
 				nodes = append(nodes, &Node{Type: NodeText, Content: token})
 			}
 		}
@@ -203,7 +203,6 @@ func parseInline(text string) []*Node {
 		lastIndex = end
 	}
 
-	// Add remaining text
 	if lastIndex < len(text) {
 		nodes = append(nodes, &Node{
 			Type:    NodeText,

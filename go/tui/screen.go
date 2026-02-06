@@ -5,6 +5,7 @@ import (
 	"basement/basement"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"golang.org/x/term"
@@ -86,6 +87,10 @@ type Screen struct {
 
 	// Scrolling
 	ScrollY int
+
+	// Capabilities
+	supportsItalic bool
+	supportsStrike bool
 }
 
 // NewScreen initializes a new screen
@@ -101,6 +106,18 @@ func NewScreen() *Screen {
 		Back:     NewBuffer(w, h),
 		out:      bufio.NewWriter(os.Stdout),
 		doneChan: make(chan struct{}),
+	}
+
+	// Check for capabilities
+	termEnv := os.Getenv("TERM")
+	if strings.Contains(termEnv, "xterm") ||
+	   strings.Contains(termEnv, "truecolor") ||
+	   strings.Contains(termEnv, "alacritty") ||
+	   strings.Contains(termEnv, "kitty") ||
+	   strings.Contains(termEnv, "screen") ||
+	   strings.Contains(termEnv, "tmux") {
+		s.supportsItalic = true
+		s.supportsStrike = true // Most modern terms support both
 	}
 
 	// Enable raw mode
@@ -164,9 +181,33 @@ func (s *Screen) Clear() {
 func (s *Screen) Render() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.renderUnlocked()
+}
 
-	// We track the current cursor position to optimize movement
+// Frame executes draw under a single lock: clear, draw, diff+flush.
+// Use drawTextUnlocked inside the draw callback.
+func (s *Screen) Frame(draw func()) {
+	s.mu.Lock()
+
+	// Clear
+	for i := range s.Back.Cells {
+		s.Back.Cells[i] = Cell{Char: ' '}
+	}
+
+	// Draw to back buffer
+	draw()
+
+	// Diff and flush
+	s.renderUnlocked()
+
+	s.mu.Unlock()
+}
+
+func (s *Screen) renderUnlocked() {
+	// Track cursor position and current style to minimize escape sequences
 	curX, curY := -1, -1
+	var lastStyle basement.Style
+	styleActive := false
 
 	for y := 0; y < s.Back.Height; y++ {
 		for x := 0; x < s.Back.Width; x++ {
@@ -183,8 +224,13 @@ func (s *Screen) Render() {
 					curX, curY = x, y
 				}
 
-				// Apply styles
-				s.writeStyle(backCell.Style)
+				// Only emit style changes when style differs from last written cell
+				if !styleActive || backCell.Style != lastStyle {
+					s.out.WriteString("\x1b[0m")
+					s.writeStyle(backCell.Style)
+					lastStyle = backCell.Style
+					styleActive = true
+				}
 
 				// Write char
 				if backCell.Char == 0 {
@@ -193,9 +239,6 @@ func (s *Screen) Render() {
 					s.out.WriteRune(backCell.Char)
 				}
 
-				// Reset style
-				s.out.WriteString("\x1b[0m")
-
 				// Update cursor pos (it moved forward by 1)
 				curX++
 
@@ -203,6 +246,11 @@ func (s *Screen) Render() {
 				s.Front.Cells[idx] = backCell
 			}
 		}
+	}
+
+	// Final reset
+	if styleActive {
+		s.out.WriteString("\x1b[0m")
 	}
 
 	s.out.Flush()
@@ -215,8 +263,21 @@ func (s *Screen) writeStyle(st basement.Style) {
 	if st.Dim {
 		s.out.WriteString("\x1b[2m")
 	}
+	if st.Italic {
+		if s.supportsItalic {
+			s.out.WriteString("\x1b[3m")
+		} else {
+			s.out.WriteString("\x1b[2m") // Fallback to Dim
+		}
+	}
 	if st.Underline {
 		s.out.WriteString("\x1b[4m")
+	}
+	if st.Strike {
+		if s.supportsStrike {
+			s.out.WriteString("\x1b[9m")
+		}
+		// No fallback for strike
 	}
 	if st.Reverse {
 		s.out.WriteString("\x1b[7m")
@@ -236,7 +297,11 @@ func (s *Screen) writeStyle(st basement.Style) {
 func (s *Screen) DrawText(x, y int, text string, style basement.Style) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.drawTextUnlocked(x, y, text, style)
+}
 
+// drawTextUnlocked is the lock-free version for use within Frame()
+func (s *Screen) drawTextUnlocked(x, y int, text string, style basement.Style) {
 	col := x
 	for _, r := range text {
 		if r == '\n' {
