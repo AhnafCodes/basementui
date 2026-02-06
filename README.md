@@ -1,6 +1,6 @@
 # BasementUI
 
-A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **[uhtml](https://github.com/WebReflection/uhtml)**, **[Preact Signals](https://github.com/preactjs/signals)**, and **[echomd](https://github.com/WebReflection/echomd)**.
+A Reactive Terminal User Interface (TUI) library for Go, inspired by **[uhtml](https://github.com/WebReflection/uhtml)**, **[Preact Signals](https://github.com/preactjs/signals)**, and **[echomd](https://github.com/WebReflection/echomd)**.
 
 ## Features
 
@@ -17,7 +17,7 @@ A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **[
 BasementUI combines **Fine-Grained Reactivity** with **Double-Buffered Rendering**.
 
 1.  **Reactivity**: Unlike React (which diffs VDOM trees), BasementUI uses Signals. When a signal changes, only the dependent parts of the UI are re-evaluated.
-2.  **Rendering**: The UI tree is drawn to a "Back Buffer". This buffer is then diffed against the "Front Buffer" (what's on screen), and only the changed cells are flushed to the terminal. This mimics how GPUs work and ensures high performance without flickering.
+2.  **Rendering**: The UI tree is drawn to a "Back Buffer". This buffer is then diffed against the "Front Buffer" (what's on screen), and only the changed cells are flushed to the terminal. This mimics how GPUs work and ensures high performance without flickering(in theory).
 3.  **Pipeline**: `Parse (Markdown) -> Tree (AST) -> Measure (Layout) -> Draw (Buffer) -> Diff/Flush`.
 
 ## Getting Started
@@ -108,8 +108,9 @@ This pulls in the `github.com/alecthomas/chroma` dependency. Without this tag, c
 
 ## Examples
 
-We provide several examples to demonstrate the capabilities of BasementUI, ranging from basic static text to complex reactive components.
+Examples to demonstrate the capabilities of BasementUI, ranging from basic static text to complex reactive components.
 
+[Code](https://github.com/AhnafCodes/basementui/tree/main/go/cmd)
 You can run them using `make`:
 
 ### Example 1: Hello World (Static Text)
