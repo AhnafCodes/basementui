@@ -1,135 +1,226 @@
-# echomd [![build status](https://travis-ci.org/WebReflection/echomd.svg)](https://travis-ci.org/WebReflection/echomd)
-An md like conversion tool for shell terminals.
+# BasementUI
 
-<sub>Would you like to try echomd Markdown for browser console? Check [consolemd](https://github.com/WebReflection/consolemd#consolemd-) out</sub>
-
-Fully inspired by the work of John Gruber,
-`echomd` is a [Markdown](http://daringfireball.net/projects/markdown/) flavor
-that targets terminals and consoles.
-
-There are few inconsistencies across Windows, Mac, and Linux worlds,
-when it comes to highlight, underline, or emphasize text in console,
-and `echomd` is here to help and make it as simple as possible to improve
-console textual layout.
-
-![echomd -h](https://webreflection.github.io/echomd/echomd.png)
-
-### How to install it
-
-You can chose between the [perl version](perl/echomd),
-virtually natively available in every Linux and Mac terminal,
-or the [nodejs version](js/echomd), usable both as module
-and executable.
-
-#### ArchLinux perl version via [AUR](https://aur.archlinux.org/packages/echomd)
-`yaourt -S --noconfirm --needed echomd`
-
-#### Other Mac or Linux distributions (perl based)
-`curl -o- https://webreflection.github.io/echomd/install | bash`
-
-#### NodeJS version via [npm](https://www.npmjs.com/package/echomd)
-`npm install -g echomd`
-
-Once installed, you can see a demo via `echomd -h` or `echomd --help`.
-Please note the demo has duplicated surrounding chars on purpose,
-so you can remember how to replicate a specific feature.
-
+A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **uhtml** and **Preact Signals**.
 
 ## Features
 
-Following the list of transformers implemented via `echomd`.
+*   **Reactive State**: Built-in Signal-based state management.
+*   **Markdown Templating**: Use `basement` syntax to style your UI.
+*   **Efficient Rendering**: Virtual screen buffer with diffing to prevent flickering.
+*   **Input Handling**: Cross-platform raw mode and keyboard event support.
+*   **Layout System**: Flexbox-like layout engine with Rows, Columns, and Borders.
+*   **Optional Syntax Highlighting**: Support for Chroma (via build tag).
+*   **No Virtual DOM**: Updates are fine-grained and bound directly to the screen buffer.
 
-#### Code blocks
-Code blocks are simply **not parsed** and preserved as they are.
-These can be both multiline, via 3 backticks, or single line.
+## Getting Started
 
-    echomd 'Some text
-    ```
-    multi *line*
-    block
-    ```
-    and `single _line_` too'
+### Installation
 
+Clone the repository and import the local package:
 
-#### Horizontal lines
-Using 3 or more `***` or `---` or `___`,
-with optional spaces in between,
-produces a 72 length straight line,
-simulating somehow a browser `<hr>`
-
-#### Headers
-There are two kind of headers, the most important one,
-defined using only **one** `# Hashtag`,
-which is a fully highlighted and bold header,
-or two or more `## Hashtags` for less important headers,
-still highlighted compared to the rest of the text.
-
-#### Bold
-Using one or two asterisks would produce some bold text.
-`*this*` or `**this**` will produce identical text,
-preserving the semantic original meaning of the `*`,
-showing up consistently bold in every platform.
-
-The reason one star does not produce `<em>` tag equivalent,
-is that italic text is unfortunately not widely supported (Linux only)
-so it'd be bad UX for cross platform users if completely unrecognizable elsewhere.
-
-#### Dim
-A meaningful, cross platform, way to dim some text via one or more `-`.
-
-#### Underline
-Following same cross platform consistency reason,
-using one or more underscores will produce an underlined text.
-`_this_` and `__this__`are equivalent, and it's possible combine
-both bold and underline at once via `*_this_*` or `_*that*_`.
-
-#### Blink
-Visible on Linux and macOS only, it is possible to blink text via one or more `:`.
-
-#### Reverse
-A meaningful, cross platform, way to reverse some text via one or more `!`.
-
-#### Hidden
-A way to hide text via `?`, o Mac and Linux only.
-
-#### Strike
-Visible on Linux only, and just to preserve original MD intent,
-it is possible to strike text via one or more `~`.
-
-#### Bullets list
-It is possible to create a nice bullets list simply using 1 or more spaces / tabs.
-```
-This is some text.
-  * this is a bullet
-  * this is another one
-    that will preserve spaces
-    to it's possible to go new line
-  * this is the last bullet
-And this is some text.
-```
-Bear in mind, nested lists and all possible complicated and uncommon Web related scenarios are not supported. Keep It Simple (and handy) is the root idea of this project.
-
-#### Quotes
-It is possible to quote some text simply starting a line with `> `.
-```
-This is some text from somebody else.
-> brace yourselves, echomd is coming
+```bash
+git clone https://github.com/AhnafCodes/basementui.git
 ```
 
-#### Colors and Background Colors
-Software designed for the terminal cannot go too fancy with tags or styles,
-yet it can have colors **or** background colors (not both together).
+### Usage
 
-The proposed syntax is pretty simple: `#green(text)` for text in green, and `!#green(text)` for text with a green background.
+```go
+package main
 
-The list of currently supported colors (both text or background) is the same exposed through NodeJS `util/inspect.colors` module: _bold, italic, underline, inverse, white, grey, black, blue, cyan, green, magenta, red, yellow_.
+import (
+	"basement/signals"
+	"basement/tui"
+	"time"
+)
 
-## As NodeJS moule
-The module can output directly in console or produce the raw text using `require('echomd').raw` function.
+func main() {
+	// 1. Create State
+	count := signals.New(0)
 
-### License
-`echomd` is under the MIT style License (MIT).
+	// 2. Define View
+	app := func() tui.Renderable {
+		return tui.Template(`
+# Counter App
+Current count: **%v**
 
+(Press 'q' or Ctrl+C to exit)
+`, count)
+	}
 
+	// 3. Mount to Screen
+	screen := tui.NewScreen()
+	defer screen.Close() // Restore terminal on exit
 
+	tui.Render(screen, app)
 
+	// Update state
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			count.Set(count.Get() + 1)
+		}
+	}()
+
+	// Wait for exit signal
+	quit := make(chan bool)
+	screen.OnKey(func(ev tui.KeyEvent) {
+		// Handle 'q' or Ctrl+C to exit
+		if ev.Rune == 'q' || (ev.Key == tui.KeyChar && ev.Mod == tui.ModCtrl && ev.Rune == 'c') {
+			quit <- true
+		}
+	})
+	<-quit
+}
+```
+
+## Input Handling & Raw Mode
+
+BasementUI automatically switches the terminal to **Raw Mode** to capture input directly. This has two important implications:
+
+1.  **Cleanup is Required**: You **must** call `screen.Close()` (usually via `defer`) before your program exits. If you don't, the terminal will remain in raw mode (no echo, weird formatting) until you run `reset`.
+2.  **Manual Exit Handling**: Standard signals like `SIGINT` (Ctrl+C) are captured as keyboard events. The application will **not** exit automatically. You must listen for `Ctrl+C` (which appears as `KeyChar` with `ModCtrl`) and exit the loop manually.
+
+## Scrolling
+
+BasementUI supports vertical scrolling for content that exceeds the screen height.
+
+*   **Automatic**: The `Screen` automatically detects the terminal size.
+*   **Manual Control**: You can control the scroll position by modifying `screen.ScrollY`.
+*   **Example**: See `example11_markdown` for a scrollable document implementation.
+
+## Optional Syntax Highlighting
+
+To enable syntax highlighting for code blocks, build your application with the `chroma` tag:
+
+```bash
+go build -tags chroma .
+```
+
+This pulls in the `github.com/alecthomas/chroma` dependency. Without this tag, code blocks are rendered as plain dimmed text (zero dependencies).
+
+## Examples
+
+We provide several examples to demonstrate the capabilities of BasementUI, ranging from basic static text to complex reactive components.
+
+You can run them using `make`:
+
+### Example 1: Hello World (Static Text)
+
+```bash
+make example1
+```
+
+![Example 1: Hello World](examples/example1.gif)
+
+### Example 2: Reactive Counter (Basic Signals)
+
+```bash
+make example2
+```
+
+![Example 2: Reactive Counter](examples/example2.gif)
+
+### Example 3: Computed Values (Derived State)
+
+```bash
+make example3
+```
+
+![Example 3: Computed Values](examples/example3.gif)
+
+### Example 4: Digital Clock (Real-time Updates)
+
+```bash
+make example4
+```
+
+![Example 4: Digital Clock](examples/example4.gif)
+
+### Example 5: Progress Bar (Custom Components)
+
+```bash
+make example5
+```
+
+![Example 5: Progress Bar](examples/example5.gif)
+
+### Example 6: Conditional Rendering (Dynamic UI)
+
+```bash
+make example6
+```
+
+![Example 6: Conditional Rendering](examples/example6.gif)
+
+### Example 7: Input Handling (Keyboard Events)
+
+```bash
+make example7
+```
+
+![Example 7: Input Handling](examples/example7.gif)
+
+### Example 8: Text Input (Interactive Form)
+
+```bash
+make example8
+```
+
+![Example 8: Text Input](examples/example8.gif)
+
+### Example 9: Interactive List (Menu Navigation)
+
+```bash
+make example9
+```
+
+![Example 9: Interactive List](examples/example9.gif)
+
+### Example 10: Responsive Layout (Flexbox Dashboard)
+
+```bash
+make example10
+```
+
+![Example 10: Responsive Layout](examples/example10.gif)
+
+### Example 11: Markdown Rendering (Complex Document with Scrolling)
+
+```bash
+make example11
+```
+
+![Example 11: Markdown Rendering](examples/example11.gif)
+
+### Example 12: Syntax Highlighting (Optional Chroma Integration)
+
+```bash
+make example12         # Default (No highlighting)
+make example12-chroma  # With highlighting
+```
+
+![Example 12: Syntax Highlighting](examples/example12.gif)
+
+## Re-recording GIFs
+
+To re-record the example GIFs, install the dependencies and run the recording script:
+
+```bash
+pip3 install pexpect
+cargo install --git https://github.com/asciinema/agg
+python3 examples/record_all.py
+```
+
+You can also record individual examples: `python3 examples/record_all.py example1 example2`
+
+## Running the Demo
+
+```bash
+make demo
+```
+
+## Running Tests
+
+```bash
+make test
+```

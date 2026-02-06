@@ -1,44 +1,49 @@
-.PHONY: test aur
+.PHONY: build test demo example1 example2 example3 example4 example5 example6 example7 example8 example9 example10 example11 example12 example12-chroma
 
-VERSION := `node -e "console.log(require('./package.json').version)"`
-FOLDERS := `ls`
+build:
+	cd go && go build ./...
 
 test:
-	node js/echomd -h > test/js-echomd
-	perl perl/echomd -h > test/perl-echomd
-	diff test/js-echomd test/perl-echomd || exit 1;
-	diff test/js-echomd test/demo-echomd || exit 1;
+	cd go && go test ./...
 
-aur:
-	if [ -d "aur" ]; then rm -r aur; fi
-	make test
-	mkdir -p aur/echomd/echomd
-	cp perl/echomd aur/echomd/echomd/echomd.pl
-	sed -i "s/pkgver=[0-9.]*/pkgver=$(VERSION)/" PKGBUILD
-	sync
-	tar -zcvf echomd-$(VERSION).tar.gz -C aur/echomd echomd
-	updpkgsums
-	makepkg --printsrcinfo > .SRCINFO
-	makepkg -srf
-	sync
-	rm *.tar.xz
-	rm -r {aur,pkg,src}
-	if [ ! -d ~/code/aur/echomd ]; then exit 1; fi
-	cp {LICENSE,PKGBUILD} ~/code/aur/echomd
-	mv .SRCINFO ~/code/aur/echomd
-	mv *.tar.*z ~/code/aur/echomd
-	echo "$(VERSION)" > ~/code/aur/echomd/version
-	git add .
-	git commit -m "Updating to $(VERSION)"
-	git push
-	git checkout gh-pages
-	mkdir -p archive
-	if [ -d "echomd" ]; then rm -rf echomd; fi
-	tar -zxvf ~/code/aur/echomd/*.tar.*z
-	mv ~/code/aur/echomd/*.tar.*z archive/
-	mv ~/code/aur/echomd/version ./
-	git add .
-	git commit -m "Update `cat version`"
-	git push
-	git checkout master
+demo:
+	cd go && go run cmd/demo/main.go
 
+example1:
+	cd go && go run cmd/example1_hello/main.go
+
+example2:
+	cd go && go run cmd/example2_counter/main.go
+
+example3:
+	cd go && go run cmd/example3_computed/main.go
+
+example4:
+	cd go && go run cmd/example4_clock/main.go
+
+example5:
+	cd go && go run cmd/example5_progress/main.go
+
+example6:
+	cd go && go run cmd/example6_conditional/main.go
+
+example7:
+	cd go && go run cmd/example7_input/main.go
+
+example8:
+	cd go && go run cmd/example8_textinput/main.go
+
+example9:
+	cd go && go run cmd/example9_list/main.go
+
+example10:
+	cd go && go run cmd/example10_layout/main.go
+
+example11:
+	cd go && go run cmd/example11_markdown/main.go
+
+example12:
+	cd go && go run cmd/example12_chroma/main.go
+
+example12-chroma:
+	cd go && go run -tags chroma cmd/example12_chroma/main.go

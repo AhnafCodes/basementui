@@ -1,0 +1,6 @@
+go/actual_output.txt
+/basement
+examples/*.cast
+examples/bin/
+.DS_Store
+.idea/
