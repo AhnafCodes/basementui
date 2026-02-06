@@ -209,6 +209,7 @@ make example12-chroma  # With highlighting
 
 ![Example 12: Syntax Highlighting](examples/example12.gif)
 
+
 ## Running the Demo
 
 ```bash
