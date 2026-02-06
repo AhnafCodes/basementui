@@ -109,7 +109,8 @@ This pulls in the `github.com/alecthomas/chroma` dependency. Without this tag, c
 ## Examples
 
 Examples to demonstrate the capabilities of BasementUI, ranging from basic static text to complex reactive components.
-[Code](https://github.com/AhnafCodes/basementui)
+
+[Code](https://github.com/AhnafCodes/basementui/examples)
 You can run them using `make`:
 
 ### Example 1: Hello World (Static Text)
