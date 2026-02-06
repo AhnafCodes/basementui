@@ -4,3 +4,4 @@ examples/*.cast
 examples/bin/
 .DS_Store
 .idea/
+DESIGN.md
