@@ -4,9 +4,7 @@ package basement
 type Style struct {
 	Bold      bool
 	Dim       bool
-	Italic    bool
 	Underline bool
-	Strike    bool // New field
 	Reverse   bool
 	Blink     bool
 	Color     string // ANSI color code
