@@ -1,6 +1,6 @@
 # BasementUI
 
-A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **uhtml** and **Preact Signals**.
+A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **[uhtml](https://github.com/WebReflection/uhtml)**, **[Preact Signals](https://github.com/preactjs/signals)**, and **[echomd](https://github.com/WebReflection/echomd)**.
 
 ## Features
 
@@ -11,6 +11,14 @@ A modern, reactive Terminal User Interface (TUI) library for Go, inspired by **u
 *   **Layout System**: Flexbox-like layout engine with Rows, Columns, and Borders.
 *   **Optional Syntax Highlighting**: Support for Chroma (via build tag).
 *   **No Virtual DOM**: Updates are fine-grained and bound directly to the screen buffer.
+
+## Architecture
+
+BasementUI combines **Fine-Grained Reactivity** with **Double-Buffered Rendering**.
+
+1.  **Reactivity**: Unlike React (which diffs VDOM trees), BasementUI uses Signals. When a signal changes, only the dependent parts of the UI are re-evaluated.
+2.  **Rendering**: The UI tree is drawn to a "Back Buffer". This buffer is then diffed against the "Front Buffer" (what's on screen), and only the changed cells are flushed to the terminal. This mimics how GPUs work and ensures high performance without flickering.
+3.  **Pipeline**: `Parse (Markdown) -> Tree (AST) -> Measure (Layout) -> Draw (Buffer) -> Diff/Flush`.
 
 ## Getting Started
 
@@ -200,18 +208,6 @@ make example12-chroma  # With highlighting
 ```
 
 ![Example 12: Syntax Highlighting](examples/example12.gif)
-
-## Re-recording GIFs
-
-To re-record the example GIFs, install the dependencies and run the recording script:
-
-```bash
-pip3 install pexpect
-cargo install --git https://github.com/asciinema/agg
-python3 examples/record_all.py
-```
-
-You can also record individual examples: `python3 examples/record_all.py example1 example2`
 
 ## Running the Demo
 
