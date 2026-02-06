@@ -201,17 +201,6 @@ make example12-chroma  # With highlighting
 
 ![Example 12: Syntax Highlighting](examples/example12.gif)
 
-## Re-recording GIFs
-
-To re-record the example GIFs, install the dependencies and run the recording script:
-
-```bash
-pip3 install pexpect
-cargo install --git https://github.com/asciinema/agg
-python3 examples/record_all.py
-```
-
-You can also record individual examples: `python3 examples/record_all.py example1 example2`
 
 ## Running the Demo
 
