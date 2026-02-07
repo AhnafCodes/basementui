@@ -40,29 +40,48 @@ func assignHoles(n *basement.Node, count *int) {
 
 // Render mounts the renderable to the screen
 func Render(screen *Screen, fn func() Renderable) {
-	// Parse the template ONCE.
-	// This assumes the structure of the view doesn't change, only the data in the holes.
-	// This is consistent with the uhtml/BasementUI design.
-	r := fn()
-
 	// Create an effect for the rendering
 	signals.CreateEffect(func() {
-		// Clear the screen buffer before redrawing
-		screen.Clear()
+		// Execute the view function inside the effect.
+		r := fn()
 
-		// Render the tree to the Back buffer
-		// Note: renderNode will access signal values via GetValue(),
-		// which registers this effect as a subscriber.
-		// Pass ScrollY as negative offset to y
-		renderNode(screen, r.Root, r.Args, 0, -screen.ScrollY)
-
-		// Flush to terminal
-		screen.Render()
+		// Use Frame to lock once for the entire render cycle
+		screen.Frame(func() {
+			// Render the tree to the Back buffer
+			// Note: renderNode will access signal values via GetValue(),
+			// which registers this effect as a subscriber.
+			// Pass ScrollY as negative offset to y
+			renderNode(screen, r.Root, r.Args, 0, -screen.ScrollY)
+		})
 	})
 }
 
 // renderNode draws the node to the screen. Returns the new X, Y position.
 func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int, int) {
+	// Early exit if node is completely below the viewport
+	// Note: This assumes nodes render downwards.
+	// If y >= Height, we can skip.
+	// But we need to be careful about returning the correct Y advancement for layout.
+	// Since we don't have a layout engine here (except for LayoutNode),
+	// skipping might be tricky if we need to calculate height.
+	// However, for simple flow, if we are off screen, we can just return y + estimated height?
+	// Or just let it run but DrawText will clip.
+	// The optimization requested is "Early exit when y >= Height".
+
+	if y >= s.Back.Height {
+		// We still need to traverse to find the correct next Y?
+		// If we return y, the parent loop continues.
+		// If we return y + height, the parent loop continues.
+		// If we stop traversing, we might miss side effects? (Unlikely in render)
+		// But we might miss calculating the total height if we needed it.
+		// Since we don't use the returned Y for anything other than placing the next sibling,
+		// and the next sibling will also be off-screen, it's safe to return y.
+		// Wait, if we return y, the next sibling draws at y.
+		// If we return y+1, next sibling draws at y+1.
+		// It doesn't matter much if they are all off screen.
+		return x, y
+	}
+
 	switch n.Type {
 	case basement.NodeRoot:
 		curY := y
@@ -147,7 +166,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 				if part == "" { continue }
 
 				if curY >= 0 && curY < s.Back.Height {
-					s.DrawText(curX, curY, part, span.Style)
+					// Use unlocked version since we are inside Frame()
+					s.drawTextUnlocked(curX, curY, part, span.Style)
 				}
 				curX += utf8.RuneCountInString(part)
 			}
@@ -161,7 +181,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 			return x, y + 1 // Treat as newline
 		}
 		if y >= 0 && y < s.Back.Height {
-			s.DrawText(x, y, n.Content, n.Style)
+			// Use unlocked version since we are inside Frame()
+			s.drawTextUnlocked(x, y, n.Content, n.Style)
 		}
 		return x + utf8.RuneCountInString(n.Content), y
 
@@ -215,7 +236,8 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 				return curX, y
 			} else {
 				if y >= 0 && y < s.Back.Height {
-					s.DrawText(x, y, str, n.Style)
+					// Use unlocked version since we are inside Frame()
+					s.drawTextUnlocked(x, y, str, n.Style)
 				}
 				return x + utf8.RuneCountInString(str), y
 			}
@@ -247,7 +269,9 @@ func mergeStyles(parent, child basement.Style) basement.Style {
 	return basement.Style{
 		Bold:      parent.Bold || child.Bold,
 		Dim:       parent.Dim || child.Dim,
+		Italic:    parent.Italic || child.Italic,
 		Underline: parent.Underline || child.Underline,
+		Strike:    parent.Strike || child.Strike,
 		Reverse:   parent.Reverse || child.Reverse,
 		Blink:     parent.Blink || child.Blink,
 		Color:     color,

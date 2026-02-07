@@ -38,19 +38,25 @@ func Auto() Size {
 	return Size{Type: SizeAuto}
 }
 
-// LayoutNode represents a node in the layout tree
+// LayoutNode represents a node in the layout tree.
+// Uses a doubly linked list structure (inspired by LinkeDOM) instead of
+// child slices for O(1) insertions and zero slice allocations.
 type LayoutNode struct {
 	Direction Direction
 	Width     Size
 	Height    Size
 	Padding   int
 	Border    bool
-	Children  []interface{} // Can be *LayoutNode, Renderable (via wrapper), string, or Signal
+	Content   interface{} // For leaf nodes: string, Renderable, or Signal
+
+	// Linked list pointers
+	Parent     *LayoutNode
+	FirstChild *LayoutNode
+	LastChild  *LayoutNode
+	Prev       *LayoutNode
+	Next       *LayoutNode
 
 	// Calculated during Measure pass
 	computedX, computedY int
 	computedW, computedH int
-
-	// Cached child geometries from Measure pass
-	childGeoms []struct{ w, h int }
 }

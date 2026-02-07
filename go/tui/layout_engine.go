@@ -8,12 +8,25 @@ import (
 	"unicode/utf8"
 )
 
+// effectiveNode resolves a child node for layout purposes.
+// For direct LayoutNode children (Content == nil), returns the child itself.
+// For content wrappers whose signal resolves to a *LayoutNode, returns the resolved node.
+// For content wrappers with non-LayoutNode content, returns nil.
+func effectiveNode(child *LayoutNode) *LayoutNode {
+	if child.Content == nil {
+		return child
+	}
+	val := resolveValue(child.Content)
+	if node, ok := val.(*LayoutNode); ok {
+		return node
+	}
+	return nil
+}
+
 // Measure calculates the dimensions of the layout tree.
 // It populates the computed fields in LayoutNode.
 func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 	// 1. Determine available space for content (Box Model: Border-Box)
-	// Padding and Border consume space from the constraint.
-
 	horizontalDeduction := n.Padding * 2
 	verticalDeduction := n.Padding * 2
 	if n.Border {
@@ -33,46 +46,49 @@ func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 	var totalAuto int
 	var totalFlexWeight int
 
-	// Initialize childGeoms storage
-	n.childGeoms = make([]struct{ w, h int }, len(n.Children))
-
 	// First pass: Measure Fixed and Auto children to determine remaining space for Flex
-	for i, child := range n.Children {
-		// Resolve signal if present
-		val := resolveValue(child)
+	for child := n.FirstChild; child != nil; child = child.Next {
+		node := effectiveNode(child)
 
-		// Determine size constraints for this child
-		if node, ok := val.(*LayoutNode); ok {
-			// It's a nested layout node
+		if node != nil {
+			// It's a nested layout node (direct or resolved from signal)
 			if n.Direction == DirRow {
-				if node.Width.Type == SizeFixed {
+				switch node.Width.Type {
+				case SizeFixed:
 					w, h := node.Measure(node.Width.Value, contentConstraintH)
-					n.childGeoms[i] = struct{ w, h int }{w, h}
+					child.computedW = w
+					child.computedH = h
 					totalFixed += w
-				} else if node.Width.Type == SizeAuto {
+				case SizeAuto:
 					w, h := node.Measure(contentConstraintW, contentConstraintH)
-					n.childGeoms[i] = struct{ w, h int }{w, h}
+					child.computedW = w
+					child.computedH = h
 					totalAuto += w
-				} else { // Flex
+				default: // Flex
 					totalFlexWeight += node.Width.Value
 				}
 			} else { // Column
-				if node.Height.Type == SizeFixed {
+				switch node.Height.Type {
+				case SizeFixed:
 					w, h := node.Measure(contentConstraintW, node.Height.Value)
-					n.childGeoms[i] = struct{ w, h int }{w, h}
+					child.computedW = w
+					child.computedH = h
 					totalFixed += h
-				} else if node.Height.Type == SizeAuto {
+				case SizeAuto:
 					w, h := node.Measure(contentConstraintW, contentConstraintH)
-					n.childGeoms[i] = struct{ w, h int }{w, h}
+					child.computedW = w
+					child.computedH = h
 					totalAuto += h
-				} else { // Flex
+				default: // Flex
 					totalFlexWeight += node.Height.Value
 				}
 			}
 		} else {
 			// It's content (string, Renderable, etc.)
+			val := resolveValue(child.Content)
 			w, h := measureContent(val, contentConstraintW, contentConstraintH)
-			n.childGeoms[i] = struct{ w, h int }{w, h}
+			child.computedW = w
+			child.computedH = h
 
 			if n.Direction == DirRow {
 				totalAuto += w
@@ -94,10 +110,10 @@ func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 	// 4. Second pass: Measure Flex children
 	var maxCross int // Max height in Row, Max width in Col
 
-	for i, child := range n.Children {
-		val := resolveValue(child)
+	for child := n.FirstChild; child != nil; child = child.Next {
+		node := effectiveNode(child)
 
-		if node, ok := val.(*LayoutNode); ok {
+		if node != nil {
 			isFlex := (n.Direction == DirRow && node.Width.Type == SizeFlex) ||
 			          (n.Direction == DirColumn && node.Height.Type == SizeFlex)
 
@@ -116,15 +132,16 @@ func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 				} else {
 					w, h = node.Measure(contentConstraintW, share)
 				}
-				n.childGeoms[i] = struct{ w, h int }{w, h}
+				child.computedW = w
+				child.computedH = h
 			}
 		}
 
 		// Update max cross dimension
 		if n.Direction == DirRow {
-			if n.childGeoms[i].h > maxCross { maxCross = n.childGeoms[i].h }
+			if child.computedH > maxCross { maxCross = child.computedH }
 		} else {
-			if n.childGeoms[i].w > maxCross { maxCross = n.childGeoms[i].w }
+			if child.computedW > maxCross { maxCross = child.computedW }
 		}
 	}
 
@@ -135,7 +152,7 @@ func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 	if n.Width.Type == SizeAuto {
 		if n.Direction == DirRow {
 			contentW := 0
-			for _, s := range n.childGeoms { contentW += s.w }
+			for child := n.FirstChild; child != nil; child = child.Next { contentW += child.computedW }
 			finalW = contentW + horizontalDeduction
 		} else {
 			finalW = maxCross + horizontalDeduction
@@ -147,7 +164,7 @@ func (n *LayoutNode) Measure(constraintW, constraintH int) (int, int) {
 			finalH = maxCross + verticalDeduction
 		} else {
 			contentH := 0
-			for _, s := range n.childGeoms { contentH += s.h }
+			for child := n.FirstChild; child != nil; child = child.Next { contentH += child.computedH }
 			finalH = contentH + verticalDeduction
 		}
 	}
@@ -179,22 +196,25 @@ func (n *LayoutNode) Draw(screen *Screen, x, y int) {
 	// Draw Children
 	curX, curY := contentX, contentY
 
-	for i, child := range n.Children {
-		val := resolveValue(child)
-		size := n.childGeoms[i]
-
-		if node, ok := val.(*LayoutNode); ok {
-			node.Draw(screen, curX, curY)
+	for child := n.FirstChild; child != nil; child = child.Next {
+		if child.Content != nil {
+			// Content wrapper node: resolve and draw
+			val := resolveValue(child.Content)
+			if node, ok := val.(*LayoutNode); ok {
+				node.Draw(screen, curX, curY)
+			} else {
+				drawContent(screen, val, curX, curY, child.computedW, child.computedH)
+			}
 		} else {
-			// Render content
-			drawContent(screen, val, curX, curY, size.w, size.h)
+			// Direct LayoutNode child
+			child.Draw(screen, curX, curY)
 		}
 
 		// Advance cursor
 		if n.Direction == DirRow {
-			curX += size.w
+			curX += child.computedW
 		} else {
-			curY += size.h
+			curY += child.computedH
 		}
 	}
 }
@@ -245,12 +265,6 @@ func drawContent(screen *Screen, v interface{}, x, y, w, h int) {
 			runes := []rune(line)
 			line = string(runes[:w])
 		}
-
-		// Draw directly to buffer to avoid mutex issues if called from Render loop
-		// But Screen.DrawText uses mutex.
-		// Since we are single-threaded in Render effect, mutex is fine but redundant.
-		// However, to be consistent with drawBorder (which uses Set directly),
-		// we should probably use Set directly here too.
 
 		col := x
 		for _, r := range line {
