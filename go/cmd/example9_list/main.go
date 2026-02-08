@@ -3,7 +3,6 @@ package main
 import (
 	"basement/signals"
 	"basement/tui"
-	"fmt"
 )
 
 func main() {
@@ -22,22 +21,38 @@ func main() {
 	selectedIndex := signals.New(0)
 
 	// Computed view for the list
-	listView := signals.NewComputed(func() string {
+	// Optimization: Return a LayoutNode tree instead of a string to avoid re-parsing Markdown on every frame.
+	listView := signals.NewComputed(func() interface{} {
 		idx := selectedIndex.Get()
-		var out string
 
+		var nodes []interface{}
 		for i, item := range items {
+			label := "  " + item
 			if i == idx {
-				// Highlight selected item
-				out += fmt.Sprintf("#green(> %s)\n", item)
+				label = "> " + item
+			}
+
+			// Create a Box for each item
+			// We use manual styling via Box?
+			// tui.Box doesn't support styling text directly yet (it takes string).
+			// But we can use a string with markup inside Box?
+			// If we use markup, it still gets parsed.
+
+			// To be fastest, we should use raw strings if possible, or simple markup.
+			// Parsing a small string "#green(...)" is faster than a big block.
+
+			if i == idx {
+				nodes = append(nodes, tui.Box("#green("+label+")", false, 0))
 			} else {
-				out += fmt.Sprintf("  %s\n", item)
+				nodes = append(nodes, tui.Box(label, false, 0))
 			}
 		}
-		return out
+
+		return tui.Col(nodes...)
 	})
 
 	app := func() tui.Renderable {
+		// We use a static template that just holds the list
 		return tui.Template(`
 # Main Menu
 

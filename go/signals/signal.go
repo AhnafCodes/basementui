@@ -1,7 +1,6 @@
 package signals
 
 import (
-	"reflect"
 	"sync"
 )
 
@@ -62,8 +61,12 @@ func (s *Signal[T]) Peek() T {
 func (s *Signal[T]) Set(val T) {
 	s.mu.Lock()
 
-	// Equality check to prevent infinite loops and unnecessary updates
-	if reflect.DeepEqual(s.value, val) {
+	// Fast equality check using interface comparison.
+	// This uses == for comparable types (int, string, pointers) which is O(1).
+	// For non-comparable types (structs with slices, linked lists), the recover
+	// skips the check and always propagates — safe and avoids the catastrophic
+	// cost of reflect.DeepEqual on cyclic structures (e.g. doubly-linked LayoutNodes).
+	if fastEqual(s.value, val) {
 		s.mu.Unlock()
 		return
 	}
@@ -77,6 +80,13 @@ func (s *Signal[T]) Set(val T) {
 	for _, sub := range subs {
 		sub.OnUpdate()
 	}
+}
+
+// fastEqual compares two values using interface == (pointer/value equality).
+// Returns false for non-comparable types instead of panicking.
+func fastEqual[T any](a, b T) bool {
+	defer func() { recover() }()
+	return any(a) == any(b)
 }
 
 func (s *Signal[T]) subscribe(sub Subscriber) {

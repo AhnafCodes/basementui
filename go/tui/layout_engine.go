@@ -226,8 +226,27 @@ func resolveValue(v interface{}) interface{} {
 	return v
 }
 
+// extractText walks an AST and returns only the visible text content.
+func extractText(n *basement.Node) string {
+	if n.Type == basement.NodeText {
+		return n.Content
+	}
+	var b strings.Builder
+	for _, child := range n.Children {
+		b.WriteString(extractText(child))
+	}
+	return b.String()
+}
+
 func measureContent(v interface{}, maxW, maxH int) (int, int) {
 	s := fmt.Sprintf("%v", v)
+
+	// If string contains markup, measure the rendered text, not the raw syntax.
+	// e.g. "#green(Hello)" should measure as 5 chars, not 13.
+	if containsMarkup(s) {
+		root := basement.ParseAST(s)
+		s = extractText(root)
+	}
 
 	// Handle newlines for correct measurement
 	lines := strings.Split(s, "\n")
@@ -252,6 +271,15 @@ func measureContent(v interface{}, maxW, maxH int) (int, int) {
 func drawContent(screen *Screen, v interface{}, x, y, w, h int) {
 	s := fmt.Sprintf("%v", v)
 
+	// Check for markup
+	if containsMarkup(s) {
+		// Parse and render using the main render engine
+		root := basement.ParseAST(s)
+		// Use renderNode which uses drawTextUnlocked
+		renderNode(screen, root, nil, x, y)
+		return
+	}
+
 	// Handle newlines
 	lines := strings.Split(s, "\n")
 
@@ -266,11 +294,8 @@ func drawContent(screen *Screen, v interface{}, x, y, w, h int) {
 			line = string(runes[:w])
 		}
 
-		col := x
-		for _, r := range line {
-			screen.Back.Set(col, y+i, r, basement.Style{})
-			col++
-		}
+		// Use unlocked version since we are inside Frame()
+		screen.drawTextUnlocked(x, y+i, line, basement.Style{})
 	}
 }
 

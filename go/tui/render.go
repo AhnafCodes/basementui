@@ -94,6 +94,7 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 	case basement.NodeBlock, basement.NodeHeader:
 		// Apply block style
 		curX := x
+		maxY := y
 		for _, child := range n.Children {
 			// Inherit style from block
 			mergedStyle := mergeStyles(n.Style, child.Style)
@@ -102,10 +103,18 @@ func renderNode(s *Screen, n *basement.Node, args []interface{}, x, y int) (int,
 			tempChild := *child
 			tempChild.Style = mergedStyle
 
-			newX, _ := renderNode(s, &tempChild, args, curX, y)
+			newX, newY := renderNode(s, &tempChild, args, curX, y)
 			curX = newX
+			if newY > maxY {
+				maxY = newY
+			}
 		}
-		return x, y + 1 // Blocks imply new line
+		// Normal inline content stays on one line (maxY == y), so advance by 1.
+		// But if a child (e.g. LayoutNode via %v) consumed multiple lines, respect that.
+		if maxY <= y {
+			maxY = y + 1
+		}
+		return x, maxY
 
 	case basement.NodeHR:
 		// Draw a horizontal line
