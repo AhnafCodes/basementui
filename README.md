@@ -1,6 +1,6 @@
 # BasementUI
 
-A Reactive Terminal User Interface (TUI) library for Go, inspired by **[uhtml](https://github.com/WebReflection/uhtml)**, **[Preact Signals](https://github.com/preactjs/signals)**, and **[echomd](https://github.com/WebReflection/echomd)**.
+A Reactive Terminal User Interface (TUI) library for Go, inspired by **[uhtml](https://github.com/WebReflection/uhtml)**, **[Preact Signals](https://github.com/preactjs/signals)**, **[linkedom](https://github.com/WebReflection/linkedom)** and **[echomd](https://github.com/WebReflection/echomd)** i.e. mainly Ideas of **[Andrea Giammarchi](https://webreflection.medium.com/linkedom-a-jsdom-alternative-53dd8f699311)**.
 
 ## Features
 
